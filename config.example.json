@@ -1,0 +1,6 @@
+{
+    "account"       :   "example_account@sohu.com",
+    "password"      :   "example_password",
+    "driver_path"   :   "path_to_browser_driver",
+    "blog_home"     :   "http://example_account.blog.sohu.com/entry/"
+}
