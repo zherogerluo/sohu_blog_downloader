@@ -1,5 +1,5 @@
 # Simple script to download all blogs from specified blog.sohu.com account
-# and save them as a single html file with foldable blog entries
+# and save them as a json file
 
 from selenium import webdriver
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
@@ -22,7 +22,7 @@ def login(browser, url, account, password):
             browser.find_element_by_name('account').send_keys(account)
             browser.find_element_by_name('password').send_keys(password)
             browser.find_element_by_id('login_toolbar').click()
-            time.sleep(2) # wait for login to complete
+            time.sleep(3) # wait for login to complete
             break
         except:
             time.sleep(0.5)
@@ -42,15 +42,15 @@ def get_page_count(browser):
 
 # Fetch all blog links and dates, from blog manager page, because some blogs might have been 
 # filtered and hidden, which are only visible through blog manager
-def get_blog_data(browser, page_count):
-    blog_data = []
+def get_blog_link_date(browser, page_count, reverse=False):
+    link_date = []
 
     for page in range(1, page_count + 1):
         print("Navigating to Page %d..." % page)
         browser.get('http://blog.sohu.com/home/entry/list.htm?page=%d' % page) # blog manager
         time.sleep(0.3)
 
-        cur_data = []
+        count = 0
         # blog_link_elements = browser.find_elements_by_xpath('//*[@class="newBlog-list-title"]/a')
         # blog_link_elements = browser.find_elements_by_xpath(
         #     "//a[contains(@href,'http://blog.sohu.com/manage/entry.do?m=edit&id=')]")
@@ -60,15 +60,17 @@ def get_blog_data(browser, page_count):
             date = element.find_element_by_xpath('./span[@class="date"]').text
             # get editor url
             link = element.find_element_by_xpath('./span[@class="oper"]/a[@target]').get_attribute('href')
-            cur_data.append((link, date))
-        
-        for data in cur_data:
-            print(data)
+            entry = (link, date)
+            link_date.append(entry)
+            count += 1
+            print(entry)
 
-        print("Blog count on Page %d : %d" % (page, len(cur_data)))
-        blog_data += cur_data
+        print("Blog count on Page %d : %d" % (page, count))
 
-    return blog_data
+    if reverse:
+        link_date.reverse()
+    
+    return link_date
 
 # Fetch blog content. Blog link has to be the editor link.
 def get_blog_content(browser, link):
@@ -79,12 +81,12 @@ def get_blog_content(browser, link):
 
     editor_frame = browser.find_element_by_xpath('//*[@id="ifrEditorContainer"]/div/iframe')
     browser.switch_to.frame(editor_frame) # switch to editor virtual document
-    body = browser.find_element_by_xpath('/html/body')
+    body = browser.find_element_by_xpath('/html/body').get_attribute('innerHTML')
     print("Fetched content: title = %s, tag = %s" % (title, tag))
     
     return title, tag, body
 
-def main():
+def get_blog_data():
     with open('config.json', 'r') as file:
         config = json.load(file)
     
@@ -95,35 +97,29 @@ def main():
 
     browser = get_browser(driver_path, mode="eager") # can continue once page becomes interactive
     login(browser, blog_home, account, password)
-    data = get_blog_data(browser, get_page_count(browser))
+    page_count = get_page_count(browser)
+    link_date = get_blog_link_date(browser, page_count, reverse=True)
     browser.quit()
 
     browser = get_browser(driver_path) # back to normal mode - wait for page to be fully loaded
     login(browser, blog_home, account, password)
 
-    with open('blog_content.html', 'w') as file:
-        file.write('<html>\n')
-        file.write('<body>\n')
-        for link, date in data:
-            while True:
-                try:
-                    title, tag, body = get_blog_content(browser, link)
-                    break
-                except: # might run into exception when failed to load captcha image
-                    time.sleep(2)
+    blog_data = []
 
-            file.write('<details><summary>%s&nbsp;&nbsp;&nbsp;&nbsp;%s</summary>\n' % (date, title))
-            file.write('<p>标签:&nbsp;&nbsp;%s<br></p>\n' % tag)
-            file.write(body.get_attribute('innerHTML'))
-            file.write('<br>\n')
-            file.write('</details>\n')
-            print("Content written to file for blog %s %s" % (date, title))
+    for link, date in link_date:
+        while True:
+            try:
+                title, tag, body = get_blog_content(browser, link)
+                break
+            except: # might run into exception when failed to load captcha image
+                time.sleep(2)
+        blog_data.append((link, date, title, tag, body))
 
-        file.write('</body>\n')
-        file.write('</html>\n')
-        browser.quit()
-        print("Finished.")
+    browser.quit()
+    return blog_data
 
 if __name__ == '__main__':
-    main()
+    blog_data = get_blog_data()
+    with open("blog_data.json", "w") as file:
+        json.dump(blog_data, file)
 
