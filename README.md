@@ -1,5 +1,5 @@
 # Sohu Blog Downloader
-Scrapes blogs from blog.sohu.com using specified account and writes to html.
+Scrapes blogs from blog.sohu.com using specified account.
 
 # Dependency
 Selenium    
